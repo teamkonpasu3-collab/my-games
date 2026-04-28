@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>4v4 コマンドバトル</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="app">
+    <h1>4v4 コマンドバトル</h1>
+
+    <section id="setup" class="panel">
+      <h2>スキルを3つ選んで出撃</h2>
+      <p class="hint">スマホ向け：スキルをタップして3つ選択後、ゲーム開始。</p>
+      <div id="skillList" class="skill-list"></div>
+      <button id="startBtn" disabled>ゲーム開始</button>
+    </section>
+
+    <section id="battle" class="panel hidden">
+      <div class="teams">
+        <div>
+          <h3>味方チーム</h3>
+          <div id="allyArea" class="unit-list"></div>
+        </div>
+        <div>
+          <h3>敵チーム</h3>
+          <div id="enemyArea" class="unit-list"></div>
+        </div>
+      </div>
+
+      <div class="commands">
+        <h3>コマンド選択</h3>
+        <div id="commandSkills" class="skill-list"></div>
+        <p>ターゲットを選択：</p>
+        <div id="targetArea" class="unit-list"></div>
+      </div>
+
+      <div id="status" class="status">味方リーダーの行動を選んでください。</div>
+      <div id="log" class="log" aria-live="polite"></div>
+      <button id="restartBtn" class="hidden">もう一度遊ぶ</button>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
