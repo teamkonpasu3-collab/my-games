@@ -60,6 +60,28 @@ h2 { font-size: 0.95rem; }
   transition: 120ms;
 }
 
+.unit-main {
+  display: flex;
+  gap: 8px;
+}
+
+.sprite {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  border: 1px solid #665f8f;
+  background-size: 200% 400%;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+  flex: 0 0 auto;
+  background-color: #27253a;
+}
+
+.unit-info {
+  min-width: 0;
+  flex: 1;
+}
+
 .unit.selectable { cursor: pointer; }
 .unit.selectable:hover { border-color: var(--accent); }
 .unit.active { outline: 2px solid var(--accent); }
@@ -156,8 +178,18 @@ button.skill.selected { background: var(--accent); }
   .battlefield {
     grid-template-columns: 1fr 1fr;
   }
+
   .center-panel {
     grid-column: 1 / -1;
     min-height: 190px;
+  }
+
+  .unit-main {
+    align-items: center;
+  }
+
+  .sprite {
+    width: 48px;
+    height: 48px;
   }
 }
