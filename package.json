@@ -1,0 +1,12 @@
+{
+  "name": "my-games",
+  "version": "1.0.0",
+  "private": true,
+  "description": "4v4 command battle demo",
+  "scripts": {
+    "screenshot": "node scripts/screenshot.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.54.2"
+  }
+}

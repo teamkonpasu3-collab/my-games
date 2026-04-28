@@ -19,3 +19,14 @@
 
 ## 実行方法
 `index.html` をブラウザで開くだけで動作します。
+
+## Playwrightでスクリーンショット
+Codex検証向けに、スマホサイズで `index.html` を撮影するスクリプトを追加しています。
+
+```bash
+npm install
+npx playwright install chromium
+npm run screenshot
+```
+
+成功すると `screenshots/mobile-battle.png` が生成されます。
