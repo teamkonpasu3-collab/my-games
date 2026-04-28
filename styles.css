@@ -75,6 +75,17 @@ h2 { font-size: 0.95rem; }
   image-rendering: pixelated;
   flex: 0 0 auto;
   background-color: #27253a;
+  position: relative;
+  overflow: hidden;
+}
+
+.sprite-fallback {
+  position: absolute;
+  right: 2px;
+  bottom: 1px;
+  font-size: 0.9rem;
+  text-shadow: 0 1px 2px #000;
+  opacity: 0.9;
 }
 
 .unit-info {
@@ -85,6 +96,7 @@ h2 { font-size: 0.95rem; }
 .unit.selectable { cursor: pointer; }
 .unit.selectable:hover { border-color: var(--accent); }
 .unit.active { outline: 2px solid var(--accent); }
+.unit.target-selected { outline: 2px solid #51d4ff; }
 .unit.dead { opacity: 0.4; filter: grayscale(0.7); }
 
 .unit-header {
@@ -155,6 +167,21 @@ h2 { font-size: 0.95rem; }
   gap: 8px;
 }
 
+.confirm-row {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.summary {
+  flex: 1;
+  min-height: 1.1rem;
+  font-size: 0.84rem;
+  color: #d8d4ff;
+}
+
 button {
   border: none;
   border-radius: 10px;
@@ -164,6 +191,7 @@ button {
   font-weight: 700;
 }
 button.small { padding: 7px 10px; }
+button.primary { background: #5f52d9; }
 button:disabled { opacity: 0.45; }
 button.skill {
   text-align: left;
@@ -173,6 +201,36 @@ button.skill small { display: block; margin-top: 4px; font-weight: 400; opacity:
 button.skill.selected { background: var(--accent); }
 
 .hint { min-height: 1.2rem; margin: 7px 2px 0; font-size: 0.84rem; }
+
+@keyframes attackPulse {
+  0% { transform: translateX(0); }
+  35% { transform: translateX(6px); }
+  100% { transform: translateX(0); }
+}
+
+@keyframes damageFlash {
+  0% { filter: brightness(1); }
+  40% { filter: brightness(1.8); }
+  100% { filter: brightness(1); }
+}
+
+@keyframes healFlash {
+  0% { box-shadow: 0 0 0 rgba(123, 255, 172, 0); }
+  40% { box-shadow: 0 0 0 2px rgba(123, 255, 172, 0.6); }
+  100% { box-shadow: 0 0 0 rgba(123, 255, 172, 0); }
+}
+
+.unit.anim-attacking {
+  animation: attackPulse 260ms ease-out;
+}
+
+.unit.anim-damaged {
+  animation: damageFlash 300ms ease-out;
+}
+
+.unit.anim-healed {
+  animation: healFlash 320ms ease-out;
+}
 
 @media (max-width: 820px) {
   .battlefield {
