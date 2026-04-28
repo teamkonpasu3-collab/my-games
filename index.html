@@ -8,37 +8,37 @@
 </head>
 <body>
   <main class="app">
-    <h1>4v4 コマンドバトル</h1>
+    <header class="topbar">
+      <h1>4v4 コマンドバトル</h1>
+      <button id="restartBtn" class="small">リスタート</button>
+    </header>
 
-    <section id="setup" class="panel">
-      <h2>スキルを3つ選んで出撃</h2>
-      <p class="hint">スマホ向け：スキルをタップして3つ選択後、ゲーム開始。</p>
-      <div id="skillList" class="skill-list"></div>
-      <button id="startBtn" disabled>ゲーム開始</button>
+    <section class="battle-info">
+      <div id="turnInfo" class="turn-info"></div>
+      <div id="status" class="status"></div>
+      <p id="targetHint" class="hint"></p>
     </section>
 
-    <section id="battle" class="panel hidden">
-      <div class="teams">
-        <div>
-          <h3>味方チーム</h3>
-          <div id="allyArea" class="unit-list"></div>
-        </div>
-        <div>
-          <h3>敵チーム</h3>
-          <div id="enemyArea" class="unit-list"></div>
-        </div>
+    <section class="battlefield">
+      <div class="team-block">
+        <h2>味方</h2>
+        <div id="allyArea" class="unit-list"></div>
       </div>
+      <div class="team-block">
+        <h2>敵</h2>
+        <div id="enemyArea" class="unit-list"></div>
+      </div>
+    </section>
 
+    <section class="bottom-zone">
+      <div class="log-panel">
+        <h2>ログ</h2>
+        <div id="log" class="log" aria-live="polite"></div>
+      </div>
       <div class="commands">
-        <h3>コマンド選択</h3>
-        <div id="commandSkills" class="skill-list"></div>
-        <p>ターゲットを選択：</p>
-        <div id="targetArea" class="unit-list"></div>
+        <h2 id="commandTitle">コマンド</h2>
+        <div id="skillButtons" class="skill-buttons"></div>
       </div>
-
-      <div id="status" class="status">味方リーダーの行動を選んでください。</div>
-      <div id="log" class="log" aria-live="polite"></div>
-      <button id="restartBtn" class="hidden">もう一度遊ぶ</button>
     </section>
   </main>
 
