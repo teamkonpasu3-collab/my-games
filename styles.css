@@ -2,11 +2,12 @@
   color-scheme: dark;
   --bg: #15141b;
   --panel: #22212d;
-  --accent: #7f6bff;
-  --accent-2: #5fc8ff;
+  --unit: #2f2d3d;
   --text: #f6f4ff;
+  --accent: #7f6bff;
   --danger: #ff6a8d;
   --ok: #7bffac;
+  --warn: #ffd27f;
 }
 
 * { box-sizing: border-box; }
@@ -18,47 +19,32 @@ body {
 }
 
 .app {
-  max-width: 900px;
+  max-width: 1080px;
   margin: 0 auto;
-  padding: 16px;
-}
-
-h1, h2, h3 { margin: 0 0 12px; }
-.panel {
-  background: var(--panel);
-  border-radius: 14px;
-  padding: 14px;
-  margin-bottom: 14px;
-}
-
-.hint { opacity: 0.9; font-size: 0.9rem; }
-.hidden { display: none; }
-
-.skill-list {
+  min-height: 100dvh;
+  padding: 10px;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-button {
-  border: none;
-  border-radius: 10px;
-  padding: 10px 12px;
-  background: #3a3650;
-  color: var(--text);
-  font-weight: 700;
-  cursor: pointer;
-}
-button:disabled { opacity: 0.4; cursor: not-allowed; }
-button.selected { background: var(--accent); }
-button.skill { text-align: left; min-height: 76px; }
-button.skill small { display: block; opacity: 0.9; font-weight: 400; }
-
-.teams {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto 1fr auto;
   gap: 10px;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--panel);
+  padding: 10px 12px;
+  border-radius: 10px;
+}
+
+h1, h2 { margin: 0 0 8px; }
+h1 { font-size: 1.05rem; }
+h2 { font-size: 0.95rem; }
+
+.battlefield {
+  display: grid;
+  grid-template-columns: 1fr 1.1fr 1fr;
+  gap: 8px;
 }
 
 .unit-list {
@@ -67,40 +53,111 @@ button.skill small { display: block; opacity: 0.9; font-weight: 400; }
 }
 
 .unit {
-  background: #312f40;
+  background: var(--unit);
   border: 1px solid #45415a;
   border-radius: 8px;
   padding: 8px;
+  transition: 120ms;
+}
+
+.unit.selectable { cursor: pointer; }
+.unit.selectable:hover { border-color: var(--accent); }
+.unit.active { outline: 2px solid var(--accent); }
+.unit.dead { opacity: 0.4; filter: grayscale(0.7); }
+
+.unit-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
 }
 
 .hp-bar {
   height: 8px;
-  background: #1f1d29;
+  background: #1d1a28;
   border-radius: 999px;
   overflow: hidden;
   margin-top: 4px;
 }
-.hp-bar > span {
+.hp-fill {
   display: block;
   height: 100%;
-  background: linear-gradient(90deg, var(--ok), #d6ffd4);
+  background: linear-gradient(90deg, var(--ok), #e6ffdd);
 }
 
-.status { margin-top: 8px; font-weight: 700; }
-.log {
-  margin-top: 8px;
-  max-height: 210px;
-  overflow: auto;
-  background: #171621;
+.badges {
+  margin-top: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.badge {
+  font-size: 0.68rem;
+  border-radius: 999px;
+  padding: 1px 6px;
+  background: #403b59;
+}
+
+.center-panel {
+  background: var(--panel);
   border-radius: 10px;
   padding: 8px;
-  font-size: 0.9rem;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  min-height: 420px;
+}
+
+.turn-info { font-weight: 700; color: var(--warn); }
+.status { margin-top: 4px; font-weight: 700; }
+.log {
+  margin-top: 8px;
+  overflow: auto;
+  background: #171621;
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 0.82rem;
 }
 .log-line { margin-bottom: 5px; }
-.damage { color: var(--danger); }
-.heal { color: var(--ok); }
+.log .damage { color: var(--danger); }
+.log .heal { color: var(--ok); }
+.log .system { color: #b5abff; }
 
-@media (max-width: 640px) {
-  .teams { grid-template-columns: 1fr; }
-  .app { padding: 10px; }
+.commands {
+  background: var(--panel);
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.skill-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+button {
+  border: none;
+  border-radius: 10px;
+  padding: 10px;
+  background: #3a3650;
+  color: var(--text);
+  font-weight: 700;
+}
+button.small { padding: 7px 10px; }
+button:disabled { opacity: 0.45; }
+button.skill {
+  text-align: left;
+  min-height: 78px;
+}
+button.skill small { display: block; margin-top: 4px; font-weight: 400; opacity: 0.95; }
+button.skill.selected { background: var(--accent); }
+
+.hint { min-height: 1.2rem; margin: 7px 2px 0; font-size: 0.84rem; }
+
+@media (max-width: 820px) {
+  .battlefield {
+    grid-template-columns: 1fr 1fr;
+  }
+  .center-panel {
+    grid-column: 1 / -1;
+    min-height: 190px;
+  }
 }
