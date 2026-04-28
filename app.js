@@ -29,6 +29,8 @@ const STATUS = {
   REGEN: 'regen'
 };
 
+const SPRITE_ATLAS = 'assets/party-and-monsters.png';
+
 function createSkill({ id, name, targetType, cooldown = 0, desc, effects }) {
   return { id, name, targetType, cooldown, desc, effects };
 }
