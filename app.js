@@ -23,11 +23,13 @@ const STATUS = {
   REGEN: 'regen'
 };
 
+const SPRITE_ATLAS = 'assets/party-and-monsters.png';
+
 function createSkill({ id, name, targetType, cooldown = 0, desc, effects }) {
   return { id, name, targetType, cooldown, desc, effects };
 }
 
-function createCharacter({ id, name, side, role, maxHp, atk, def, spd, skills }) {
+function createCharacter({ id, name, side, role, maxHp, atk, def, spd, sprite, skills }) {
   return {
     id,
     name,
@@ -38,6 +40,7 @@ function createCharacter({ id, name, side, role, maxHp, atk, def, spd, skills })
     atk,
     def,
     spd,
+    sprite,
     skills,
     alive: true,
     statuses: [],
@@ -46,35 +49,35 @@ function createCharacter({ id, name, side, role, maxHp, atk, def, spd, skills })
 }
 
 const skills = {
-  slash: createSkill({ id: 'slash', name: 'スラッシュ', targetType: TARGET.ENEMY_SINGLE, cooldown: 0, desc: '小ダメージ', effects: [{ type: 'damage', ratio: 0.9 }] }),
+  slash: createSkill({ id: 'slash', name: 'スラッシュ', targetType: TARGET.ENEMY_SINGLE, desc: '小ダメージ', effects: [{ type: 'damage', ratio: 0.9 }] }),
   powerStrike: createSkill({ id: 'powerStrike', name: 'パワーストライク', targetType: TARGET.ENEMY_SINGLE, cooldown: 2, desc: '中ダメージ', effects: [{ type: 'damage', ratio: 1.5 }] }),
   braveBurst: createSkill({ id: 'braveBurst', name: 'ブレイブバースト', targetType: TARGET.ENEMY_SINGLE, cooldown: 4, desc: '大ダメージ', effects: [{ type: 'damage', ratio: 2.3 }] }),
 
-  wandTap: createSkill({ id: 'wandTap', name: 'ワンドヒット', targetType: TARGET.ENEMY_SINGLE, cooldown: 0, desc: '小ダメージ+味方小回復', effects: [{ type: 'damage', ratio: 0.8 }, { type: 'heal_lowest_ally', ratio: 0.22 }] }),
+  wandTap: createSkill({ id: 'wandTap', name: 'ワンドヒット', targetType: TARGET.ENEMY_SINGLE, desc: '小ダメージ+最低HP味方を小回復', effects: [{ type: 'damage', ratio: 0.8 }, { type: 'heal_lowest_ally', ratio: 0.22 }] }),
   singleHeal: createSkill({ id: 'singleHeal', name: 'ヒール', targetType: TARGET.ALLY_SINGLE, cooldown: 2, desc: '味方単体回復', effects: [{ type: 'heal', ratio: 0.45 }] }),
   allHeal: createSkill({ id: 'allHeal', name: 'グループヒール', targetType: TARGET.ALLY_ALL, cooldown: 5, desc: '味方全体回復', effects: [{ type: 'heal', ratio: 0.26 }] }),
 
-  arrowShot: createSkill({ id: 'arrowShot', name: 'アロウショット', targetType: TARGET.ENEMY_SINGLE, cooldown: 0, desc: '小ダメージ+自分攻撃UP', effects: [{ type: 'damage', ratio: 0.8 }, { type: 'apply_status', status: STATUS.ATTACK_UP, turns: 2, potency: 0.2, target: 'self' }] }),
-  battleCry: createSkill({ id: 'battleCry', name: 'バトルクライ', targetType: TARGET.ALLY_SINGLE, cooldown: 3, desc: '味方単体に攻撃UP', effects: [{ type: 'apply_status', status: STATUS.ATTACK_UP, turns: 2, potency: 0.28 }] }),
-  rallySong: createSkill({ id: 'rallySong', name: 'ラリーソング', targetType: TARGET.ALLY_ALL, cooldown: 5, desc: '味方全体に攻撃UP', effects: [{ type: 'apply_status', status: STATUS.ATTACK_UP, turns: 2, potency: 0.18 }] }),
+  arrowShot: createSkill({ id: 'arrowShot', name: 'アロウショット', targetType: TARGET.ENEMY_SINGLE, desc: '小ダメージ+自分に攻撃UP', effects: [{ type: 'damage', ratio: 0.8 }, { type: 'apply_status', status: STATUS.ATTACK_UP, turns: 2, potency: 0.2, target: 'self' }] }),
+  battleCry: createSkill({ id: 'battleCry', name: 'バトルクライ', targetType: TARGET.ALLY_SINGLE, cooldown: 3, desc: '味方単体に攻撃UP', effects: [{ type: 'apply_status', status: STATUS.ATTACK_UP, turns: 2, potency: 0.3 }] }),
+  rallySong: createSkill({ id: 'rallySong', name: 'ラリーソング', targetType: TARGET.ALLY_ALL, cooldown: 5, desc: '味方全体に攻撃UP', effects: [{ type: 'apply_status', status: STATUS.ATTACK_UP, turns: 2, potency: 0.2 }] }),
 
-  jabHex: createSkill({ id: 'jabHex', name: 'ヘックスジャブ', targetType: TARGET.ENEMY_SINGLE, cooldown: 0, desc: '小ダメージ+防御ダウン', effects: [{ type: 'damage', ratio: 0.75 }, { type: 'apply_status', status: STATUS.DEF_DOWN, turns: 2, potency: 0.2 }] }),
+  jabHex: createSkill({ id: 'jabHex', name: 'ヘックスジャブ', targetType: TARGET.ENEMY_SINGLE, desc: '小ダメージ+防御ダウン', effects: [{ type: 'damage', ratio: 0.75 }, { type: 'apply_status', status: STATUS.DEF_DOWN, turns: 2, potency: 0.2 }] }),
   stunBomb: createSkill({ id: 'stunBomb', name: 'スタンボム', targetType: TARGET.ENEMY_SINGLE, cooldown: 3, desc: '敵単体を気絶', effects: [{ type: 'apply_status', status: STATUS.STUN, turns: 1 }] }),
   breakStorm: createSkill({ id: 'breakStorm', name: 'ブレイクストーム', targetType: TARGET.ENEMY_ALL, cooldown: 5, desc: '敵全体に防御ダウン', effects: [{ type: 'apply_status', status: STATUS.DEF_DOWN, turns: 2, potency: 0.25 }] }),
 
-  slimeShot: createSkill({ id: 'slimeShot', name: 'ぷるショット', targetType: TARGET.ENEMY_SINGLE, cooldown: 0, desc: '小ダメージ', effects: [{ type: 'damage', ratio: 0.85 }] }),
+  slimeShot: createSkill({ id: 'slimeShot', name: 'ぷるショット', targetType: TARGET.ENEMY_SINGLE, desc: '小ダメージ', effects: [{ type: 'damage', ratio: 0.85 }] }),
   slimeWrap: createSkill({ id: 'slimeWrap', name: 'ねばり付き', targetType: TARGET.ENEMY_SINGLE, cooldown: 3, desc: '小ダメージ+防御ダウン', effects: [{ type: 'damage', ratio: 0.8 }, { type: 'apply_status', status: STATUS.DEF_DOWN, turns: 2, potency: 0.2 }] }),
   slimeRain: createSkill({ id: 'slimeRain', name: 'スライムレイン', targetType: TARGET.ENEMY_ALL, cooldown: 5, desc: '敵全体に小ダメージ', effects: [{ type: 'damage', ratio: 0.9 }] }),
 
-  claw: createSkill({ id: 'claw', name: 'ファイアクロー', targetType: TARGET.ENEMY_SINGLE, cooldown: 0, desc: '小ダメージ', effects: [{ type: 'damage', ratio: 0.95 }] }),
+  claw: createSkill({ id: 'claw', name: 'ファイアクロー', targetType: TARGET.ENEMY_SINGLE, desc: '小ダメージ', effects: [{ type: 'damage', ratio: 0.95 }] }),
   flameBreath: createSkill({ id: 'flameBreath', name: 'フレイムブレス', targetType: TARGET.ENEMY_SINGLE, cooldown: 2, desc: '中ダメージ', effects: [{ type: 'damage', ratio: 1.45 }] }),
   inferno: createSkill({ id: 'inferno', name: 'インフェルノ', targetType: TARGET.ENEMY_ALL, cooldown: 5, desc: '敵全体に中ダメージ', effects: [{ type: 'damage', ratio: 1.15 }] }),
 
-  spiritTouch: createSkill({ id: 'spiritTouch', name: 'スピリットタッチ', targetType: TARGET.ENEMY_SINGLE, cooldown: 0, desc: '小ダメージ+継続回復', effects: [{ type: 'damage', ratio: 0.65 }, { type: 'apply_status', status: STATUS.REGEN, turns: 2, potency: 0.08, target: 'lowest_ally' }] }),
+  spiritTouch: createSkill({ id: 'spiritTouch', name: 'スピリットタッチ', targetType: TARGET.ENEMY_SINGLE, desc: '小ダメージ+最低HP味方に継続回復', effects: [{ type: 'damage', ratio: 0.65 }, { type: 'apply_status', status: STATUS.REGEN, turns: 2, potency: 0.08, target: 'lowest_ally' }] }),
   soulMend: createSkill({ id: 'soulMend', name: 'ソウルメンド', targetType: TARGET.ALLY_SINGLE, cooldown: 3, desc: '味方単体回復', effects: [{ type: 'heal', ratio: 0.38 }] }),
   phantomPrayer: createSkill({ id: 'phantomPrayer', name: 'ファントム祈祷', targetType: TARGET.ALLY_ALL, cooldown: 5, desc: '味方全体に継続回復', effects: [{ type: 'apply_status', status: STATUS.REGEN, turns: 3, potency: 0.07 }] }),
 
-  capHit: createSkill({ id: 'capHit', name: 'キャップアタック', targetType: TARGET.ENEMY_SINGLE, cooldown: 0, desc: '小ダメージ+防御ダウン', effects: [{ type: 'damage', ratio: 0.72 }, { type: 'apply_status', status: STATUS.DEF_DOWN, turns: 2, potency: 0.18 }] }),
+  capHit: createSkill({ id: 'capHit', name: 'キャップアタック', targetType: TARGET.ENEMY_SINGLE, desc: '小ダメージ+防御ダウン', effects: [{ type: 'damage', ratio: 0.72 }, { type: 'apply_status', status: STATUS.DEF_DOWN, turns: 2, potency: 0.18 }] }),
   sporeSleep: createSkill({ id: 'sporeSleep', name: 'しびれ胞子', targetType: TARGET.ENEMY_SINGLE, cooldown: 3, desc: '敵単体を気絶', effects: [{ type: 'apply_status', status: STATUS.STUN, turns: 1 }] }),
   toxicField: createSkill({ id: 'toxicField', name: 'きのこフィールド', targetType: TARGET.ENEMY_ALL, cooldown: 5, desc: '敵全体に防御ダウン', effects: [{ type: 'apply_status', status: STATUS.DEF_DOWN, turns: 2, potency: 0.22 }] })
 };
@@ -93,17 +96,17 @@ const state = {
 
 function setupBattle() {
   state.allies = [
-    createCharacter({ id: 'ally-warrior', name: '🛡️ 剣士ライル', side: 'ally', role: '攻撃役', maxHp: 130, atk: 35, def: 14, spd: 18, skills: [skills.slash, skills.powerStrike, skills.braveBurst] }),
-    createCharacter({ id: 'ally-mage', name: '🔮 魔法使いミナ', side: 'ally', role: '回復役', maxHp: 110, atk: 24, def: 11, spd: 17, skills: [skills.wandTap, skills.singleHeal, skills.allHeal] }),
-    createCharacter({ id: 'ally-ranger', name: '🏹 レンジャーノア', side: 'ally', role: '支援役', maxHp: 115, atk: 26, def: 12, spd: 22, skills: [skills.arrowShot, skills.battleCry, skills.rallySong] }),
-    createCharacter({ id: 'ally-priest', name: '✨ 神官セレス', side: 'ally', role: '妨害役', maxHp: 120, atk: 22, def: 13, spd: 16, skills: [skills.jabHex, skills.stunBomb, skills.breakStorm] })
+    createCharacter({ id: 'ally-warrior', name: '剣士ライル', side: 'ally', role: '攻撃役', maxHp: 130, atk: 35, def: 14, spd: 18, sprite: { col: 0, row: 0 }, skills: [skills.slash, skills.powerStrike, skills.braveBurst] }),
+    createCharacter({ id: 'ally-mage', name: '魔法使いミナ', side: 'ally', role: '回復役', maxHp: 110, atk: 24, def: 11, spd: 17, sprite: { col: 0, row: 1 }, skills: [skills.wandTap, skills.singleHeal, skills.allHeal] }),
+    createCharacter({ id: 'ally-ranger', name: 'レンジャーノア', side: 'ally', role: '支援役', maxHp: 115, atk: 26, def: 12, spd: 22, sprite: { col: 0, row: 2 }, skills: [skills.arrowShot, skills.battleCry, skills.rallySong] }),
+    createCharacter({ id: 'ally-priest', name: '神官セレス', side: 'ally', role: '妨害役', maxHp: 120, atk: 22, def: 13, spd: 16, sprite: { col: 0, row: 3 }, skills: [skills.jabHex, skills.stunBomb, skills.breakStorm] })
   ];
 
   state.enemies = [
-    createCharacter({ id: 'enemy-slime', name: '💧 スライム', side: 'enemy', role: '攻撃役', maxHp: 125, atk: 28, def: 12, spd: 16, skills: [skills.slimeShot, skills.slimeWrap, skills.slimeRain] }),
-    createCharacter({ id: 'enemy-dragon', name: '🐉 ドラゴン', side: 'enemy', role: '攻撃役', maxHp: 150, atk: 33, def: 15, spd: 14, skills: [skills.claw, skills.flameBreath, skills.inferno] }),
-    createCharacter({ id: 'enemy-ghost', name: '👻 ゴースト', side: 'enemy', role: '回復役', maxHp: 105, atk: 20, def: 10, spd: 20, skills: [skills.spiritTouch, skills.soulMend, skills.phantomPrayer] }),
-    createCharacter({ id: 'enemy-mushroom', name: '🍄 マッシュ', side: 'enemy', role: '妨害役', maxHp: 118, atk: 21, def: 12, spd: 15, skills: [skills.capHit, skills.sporeSleep, skills.toxicField] })
+    createCharacter({ id: 'enemy-slime', name: 'スライム', side: 'enemy', role: '攻撃役', maxHp: 125, atk: 28, def: 12, spd: 16, sprite: { col: 1, row: 0 }, skills: [skills.slimeShot, skills.slimeWrap, skills.slimeRain] }),
+    createCharacter({ id: 'enemy-dragon', name: 'ドラゴン', side: 'enemy', role: '攻撃役', maxHp: 150, atk: 33, def: 15, spd: 14, sprite: { col: 1, row: 1 }, skills: [skills.claw, skills.flameBreath, skills.inferno] }),
+    createCharacter({ id: 'enemy-ghost', name: 'ゴースト', side: 'enemy', role: '回復役', maxHp: 105, atk: 20, def: 10, spd: 20, sprite: { col: 1, row: 2 }, skills: [skills.spiritTouch, skills.soulMend, skills.phantomPrayer] }),
+    createCharacter({ id: 'enemy-mushroom', name: 'マッシュ', side: 'enemy', role: '妨害役', maxHp: 118, atk: 21, def: 12, spd: 15, sprite: { col: 1, row: 3 }, skills: [skills.capHit, skills.sporeSleep, skills.toxicField] })
   ];
 
   state.turnOrder = [];
@@ -171,9 +174,7 @@ function processTurnStart(unit) {
   if (regen && unit.alive) {
     const amount = Math.max(4, Math.floor(unit.maxHp * regen.potency));
     const healed = healUnit(unit, amount);
-    if (healed > 0) {
-      appendLog(`${unit.name} は継続回復で ${healed} 回復。`, 'heal');
-    }
+    if (healed > 0) appendLog(`${unit.name} は継続回復で ${healed} 回復。`, 'heal');
   }
 
   const stun = getStatus(unit, STATUS.STUN);
@@ -181,9 +182,7 @@ function processTurnStart(unit) {
     appendLog(`${unit.name} は気絶して行動できない。`, 'system');
     consumeStatuses(unit);
     render();
-    setTimeout(() => {
-      advanceToNextTurn();
-    }, 550);
+    setTimeout(() => advanceToNextTurn(), 550);
     return false;
   }
 
@@ -191,9 +190,7 @@ function processTurnStart(unit) {
 }
 
 function consumeStatuses(unit) {
-  unit.statuses = unit.statuses
-    .map((s) => ({ ...s, turns: s.turns - 1 }))
-    .filter((s) => s.turns > 0);
+  unit.statuses = unit.statuses.map((s) => ({ ...s, turns: s.turns - 1 })).filter((s) => s.turns > 0);
 }
 
 function healUnit(target, amount) {
@@ -232,20 +229,22 @@ function pickTargets(actor, skill, preferredTargetId = null) {
   const enemies = livingUnits(actor.side === 'ally' ? 'enemy' : 'ally');
 
   switch (skill.targetType) {
-    case TARGET.ENEMY_SINGLE:
+    case TARGET.ENEMY_SINGLE: {
       if (preferredTargetId) {
         const preferred = getUnitById(preferredTargetId);
         if (preferred?.alive && preferred.side !== actor.side) return [preferred];
       }
       return [enemies[Math.floor(Math.random() * enemies.length)]];
+    }
     case TARGET.ENEMY_ALL:
       return enemies;
-    case TARGET.ALLY_SINGLE:
+    case TARGET.ALLY_SINGLE: {
       if (preferredTargetId) {
         const preferred = getUnitById(preferredTargetId);
         if (preferred?.alive && preferred.side === actor.side) return [preferred];
       }
       return [allies[Math.floor(Math.random() * allies.length)]];
+    }
     case TARGET.ALLY_ALL:
       return allies;
     case TARGET.SELF:
@@ -256,7 +255,7 @@ function pickTargets(actor, skill, preferredTargetId = null) {
 }
 
 function lowestHpRateUnit(units) {
-  return units.reduce((lowest, unit) => (unit.hp / unit.maxHp) < (lowest.hp / lowest.maxHp) ? unit : lowest, units[0]);
+  return units.reduce((lowest, unit) => ((unit.hp / unit.maxHp) < (lowest.hp / lowest.maxHp) ? unit : lowest), units[0]);
 }
 
 function executeSkill(actor, skill, targetId = null) {
@@ -304,10 +303,7 @@ function executeSkill(actor, skill, targetId = null) {
     }
   });
 
-  if (skill.cooldown > 0) {
-    actor.cooldowns[skill.id] = skill.cooldown;
-  }
-
+  if (skill.cooldown > 0) actor.cooldowns[skill.id] = skill.cooldown;
   consumeStatuses(actor);
 }
 
@@ -321,33 +317,26 @@ function statusLabel(type) {
 
 function chooseEnemyAction(enemy) {
   const available = enemy.skills.filter((skill) => enemy.cooldowns[skill.id] === 0);
-  const allies = livingUnits('enemy');
+  const enemyTeam = livingUnits('enemy');
   const opponents = livingUnits('ally');
 
-  const canUseBig = available.find((s) => s.cooldown >= 5);
-  if (canUseBig && Math.random() < 0.65) {
-    return { skill: canUseBig, targetId: null };
-  }
+  const bigSkill = available.find((skill) => skill.cooldown >= 5);
+  if (bigSkill && Math.random() < 0.65) return { skill: bigSkill, targetId: null };
 
-  const healerSkill = available.find((s) => s.effects.some((e) => e.type === 'heal' || e.type === 'heal_lowest_ally'));
-  const hurtAlly = allies.find((u) => u.hp / u.maxHp < 0.55);
-  if (healerSkill && hurtAlly) {
-    return { skill: healerSkill, targetId: hurtAlly.id };
-  }
+  const healSkill = available.find((skill) => skill.effects.some((e) => e.type === 'heal' || e.type === 'heal_lowest_ally'));
+  const hurtAlly = enemyTeam.find((u) => u.hp / u.maxHp < 0.55);
+  if (healSkill && hurtAlly) return { skill: healSkill, targetId: hurtAlly.id };
 
   const weightedTargets = [];
   opponents.forEach((unit) => {
-    const weight = unit.hp / unit.maxHp < 0.4 ? 3 : unit.hp / unit.maxHp < 0.7 ? 2 : 1;
+    const rate = unit.hp / unit.maxHp;
+    const weight = rate < 0.4 ? 3 : rate < 0.7 ? 2 : 1;
     for (let i = 0; i < weight; i += 1) weightedTargets.push(unit);
   });
-  const target = weightedTargets[Math.floor(Math.random() * weightedTargets.length)] || opponents[0];
+  const chosenTarget = weightedTargets[Math.floor(Math.random() * weightedTargets.length)] || opponents[0];
 
-  const candidates = [...available].sort((a, b) => b.cooldown - a.cooldown);
-  return { skill: candidates[0] || enemy.skills[0], targetId: target?.id || null };
-}
-
-function canUseSkill(actor, skill) {
-  return actor.cooldowns[skill.id] === 0;
+  const pickedSkill = [...available].sort((a, b) => b.cooldown - a.cooldown)[0] || enemy.skills[0];
+  return { skill: pickedSkill, targetId: chosenTarget?.id || null };
 }
 
 function checkGameOver() {
@@ -368,9 +357,9 @@ function advanceToNextTurn() {
   if (state.gameOver) return;
 
   if (!state.turnOrder.length || state.turnIndex >= state.turnOrder.length) {
-    state.round += 1;
     recalculateTurnOrder();
     state.turnIndex = 0;
+    state.round += 1;
   }
 
   const actorId = state.turnOrder[state.turnIndex];
@@ -384,7 +373,6 @@ function advanceToNextTurn() {
 
   state.currentActorId = actor.id;
   state.pendingSkill = null;
-
   turnInfoEl.textContent = `Round ${state.round} / 行動: ${actor.name}`;
 
   const canAct = processTurnStart(actor);
@@ -395,28 +383,28 @@ function advanceToNextTurn() {
     statusEl.textContent = `${actor.name} の行動。スキルを選択してください。`;
     targetHintEl.textContent = 'スキルを選ぶと対象が選択できます。';
     render();
-  } else {
-    state.phase = 'enemy_acting';
-    statusEl.textContent = `${actor.name} が行動中...`;
-    render();
-    setTimeout(() => {
-      const action = chooseEnemyAction(actor);
-      executeSkill(actor, action.skill, action.targetId);
-      if (!checkGameOver()) {
-        render();
-        setTimeout(() => {
-          advanceToNextTurn();
-        }, 550);
-      }
-      render();
-    }, 500);
+    return;
   }
+
+  state.phase = 'enemy_acting';
+  statusEl.textContent = `${actor.name} が行動中...`;
+  render();
+
+  setTimeout(() => {
+    const action = chooseEnemyAction(actor);
+    executeSkill(actor, action.skill, action.targetId);
+    if (!checkGameOver()) {
+      render();
+      setTimeout(() => advanceToNextTurn(), 550);
+    }
+    render();
+  }, 500);
 }
 
 function onSkillClick(skill) {
   const actor = getUnitById(state.currentActorId);
   if (!actor || state.phase !== 'await_player_skill') return;
-  if (!canUseSkill(actor, skill)) return;
+  if (actor.cooldowns[skill.id] > 0) return;
 
   state.pendingSkill = skill;
   const targetNeeded = skill.targetType === TARGET.ENEMY_SINGLE || skill.targetType === TARGET.ALLY_SINGLE;
@@ -429,9 +417,7 @@ function onSkillClick(skill) {
 
   state.phase = 'await_player_target';
   statusEl.textContent = `${skill.name} の対象を選んでください。`;
-  targetHintEl.textContent = skill.targetType === TARGET.ENEMY_SINGLE
-    ? '右側の敵をタップ'
-    : '左側の味方をタップ';
+  targetHintEl.textContent = skill.targetType === TARGET.ENEMY_SINGLE ? '右側の敵をタップ' : '左側の味方をタップ';
   render();
 }
 
@@ -452,6 +438,12 @@ function onUnitClick(unitId) {
   render();
 }
 
+function spriteStyle(unit) {
+  const colPercent = unit.sprite.col * 100;
+  const rowPercent = unit.sprite.row * 33.333;
+  return `background-image:url('${SPRITE_ATLAS}');background-position:${colPercent}% ${rowPercent}%;`;
+}
+
 function renderUnitList(container, units) {
   container.innerHTML = '';
   const actorId = state.currentActorId;
@@ -468,19 +460,21 @@ function renderUnitList(container, units) {
     const badges = unit.statuses.map((s) => `<span class="badge">${statusLabel(s.type)}:${s.turns}</span>`).join('');
 
     card.innerHTML = `
-      <div class="unit-header">
-        <strong>${unit.name}</strong>
-        <small>${unit.role}</small>
+      <div class="unit-main">
+        <div class="sprite" style="${spriteStyle(unit)}"></div>
+        <div class="unit-info">
+          <div class="unit-header">
+            <strong>${unit.name}</strong>
+            <small>${unit.role}</small>
+          </div>
+          <div>HP ${unit.hp}/${unit.maxHp}</div>
+          <div class="hp-bar"><span class="hp-fill" style="width:${hpRate}%"></span></div>
+          <div class="badges">${badges || '<span class="badge">-</span>'}</div>
+        </div>
       </div>
-      <div>HP ${unit.hp}/${unit.maxHp}</div>
-      <div class="hp-bar"><span class="hp-fill" style="width:${hpRate}%"></span></div>
-      <div class="badges">${badges || '<span class="badge">-</span>'}</div>
     `;
 
-    if (canTargetEnemy || canTargetAlly) {
-      card.addEventListener('click', () => onUnitClick(unit.id));
-    }
-
+    if (canTargetEnemy || canTargetAlly) card.addEventListener('click', () => onUnitClick(unit.id));
     container.appendChild(card);
   });
 }
@@ -502,6 +496,7 @@ function renderSkillButtons() {
     const btn = document.createElement('button');
     btn.className = `skill ${state.pendingSkill?.id === skill.id ? 'selected' : ''}`.trim();
     btn.disabled = state.phase !== 'await_player_skill' || cd > 0;
+
     const cdText = cd > 0 ? `CT: ${cd}` : '使用可能';
     btn.innerHTML = `S${index + 1} ${skill.name}<small>${skill.desc} / ${cdText}</small>`;
     btn.addEventListener('click', () => onSkillClick(skill));
