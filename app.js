@@ -215,8 +215,8 @@ function healUnit(target, amount) {
 function calculateDamage(attacker, target, ratio) {
   const atkUp = getStatus(attacker, STATUS.ATTACK_UP);
   const defDown = getStatus(target, STATUS.DEF_DOWN);
-  const atkBuff = 1 + (atkUp?.potency || 0);
-  const defDebuff = 1 + (defDown?.potency || 0);
+  const atkBuff = 1 + ((atkUp && atkUp.potency) || 0);
+  const defDebuff = 1 + ((defDown && defDown.potency) || 0);
   const atkVal = attacker.atk * atkBuff;
   const defVal = Math.max(1, target.def / defDebuff);
   const base = Math.max(1, Math.floor(atkVal * ratio - defVal * 0.5));
@@ -246,7 +246,7 @@ function pickTargets(actor, skill, preferredTargetId = null) {
     case TARGET.ENEMY_SINGLE: {
       if (preferredTargetId) {
         const preferred = getUnitById(preferredTargetId);
-        if (preferred?.alive && preferred.side !== actor.side) return [preferred];
+        if (preferred && preferred.alive && preferred.side !== actor.side) return [preferred];
       }
       return [enemies[Math.floor(Math.random() * enemies.length)]];
     }
@@ -255,7 +255,7 @@ function pickTargets(actor, skill, preferredTargetId = null) {
     case TARGET.ALLY_SINGLE: {
       if (preferredTargetId) {
         const preferred = getUnitById(preferredTargetId);
-        if (preferred?.alive && preferred.side === actor.side) return [preferred];
+        if (preferred && preferred.alive && preferred.side === actor.side) return [preferred];
       }
       return [allies[Math.floor(Math.random() * allies.length)]];
     }
@@ -377,7 +377,7 @@ function chooseEnemyAction(enemy) {
   const chosenTarget = weightedTargets[Math.floor(Math.random() * weightedTargets.length)] || opponents[0];
 
   const pickedSkill = [...available].sort((a, b) => b.cooldown - a.cooldown)[0] || enemy.skills[0];
-  return { skill: pickedSkill, targetId: chosenTarget?.id || null };
+  return { skill: pickedSkill, targetId: (chosenTarget && chosenTarget.id) || null };
 }
 
 function checkGameOver() {
@@ -506,7 +506,7 @@ function onBackClick() {
   state.phase = 'await_player_skill';
 
   const actor = getUnitById(state.currentActorId);
-  statusEl.textContent = `${actor?.name || ''} の行動。スキルを選択してください。`;
+  statusEl.textContent = `${(actor && actor.name) || ''} の行動。スキルを選択してください。`;
   targetHintEl.textContent = 'スキルを選ぶと対象を選択・確認できます。';
   render();
 }
@@ -550,8 +550,8 @@ function renderUnitList(container, units) {
     const hpRate = Math.max(0, (unit.hp / unit.maxHp) * 100);
     const isActive = actorId === unit.id;
 
-    const isChoosingEnemy = state.phase === 'await_player_target' && state.pendingSkill?.targetType === TARGET.ENEMY_SINGLE;
-    const isChoosingAlly = state.phase === 'await_player_target' && state.pendingSkill?.targetType === TARGET.ALLY_SINGLE;
+    const isChoosingEnemy = state.phase === 'await_player_target' && state.pendingSkill && state.pendingSkill.targetType === TARGET.ENEMY_SINGLE;
+    const isChoosingAlly = state.phase === 'await_player_target' && state.pendingSkill && state.pendingSkill.targetType === TARGET.ALLY_SINGLE;
     const canTargetEnemy = isChoosingEnemy && unit.side === 'enemy' && unit.alive;
     const canTargetAlly = isChoosingAlly && unit.side === 'ally' && unit.alive;
     const selectedTarget = state.pendingTargetId === unit.id && state.phase === 'await_player_confirm';
@@ -605,7 +605,7 @@ function renderSkillButtons() {
   actor.skills.forEach((skill, index) => {
     const cd = actor.cooldowns[skill.id];
     const btn = document.createElement('button');
-    btn.className = `skill ${state.pendingSkill?.id === skill.id ? 'selected' : ''}`.trim();
+    btn.className = `skill ${state.pendingSkill && state.pendingSkill.id === skill.id ? 'selected' : ''}`.trim();
     btn.disabled = !selectablePhase || cd > 0;
     const cdText = cd > 0 ? `CT: ${cd}` : '使用可能';
     btn.innerHTML = `S${index + 1} ${skill.name}<small>${skill.desc} / ${cdText}</small>`;
@@ -669,7 +669,7 @@ function appendLog(message, cls = '') {
   logEl.prepend(line);
 
   while (logEl.children.length > MAX_LOG_LINES) {
-    logEl.lastElementChild?.remove();
+    if (logEl.lastElementChild) logEl.lastElementChild.remove();
   }
 }
 
