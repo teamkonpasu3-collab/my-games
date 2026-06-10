@@ -1,679 +1,186 @@
-const allyAreaEl = document.getElementById('allyArea');
-const enemyAreaEl = document.getElementById('enemyArea');
-const turnInfoEl = document.getElementById('turnInfo');
-const statusEl = document.getElementById('status');
-const logEl = document.getElementById('log');
-const skillButtonsEl = document.getElementById('skillButtons');
-const targetHintEl = document.getElementById('targetHint');
-const commandTitleEl = document.getElementById('commandTitle');
-const selectionSummaryEl = document.getElementById('selectionSummary');
-const backBtn = document.getElementById('backBtn');
-const confirmBtn = document.getElementById('confirmBtn');
-const restartBtn = document.getElementById('restartBtn');
+(function () {
+  const DATA = window.GAME_DATA;
+  const { BattleEngine, SaveStore, STATUS_LABELS, levelStats, learnedSkills } = window.RPG;
+  const app = document.getElementById('app');
+  let saveData = SaveStore.load();
+  let screen = 'home';
+  let battle = null;
 
-const MAX_LOG_LINES = 80;
-const SPRITE_ATLAS = 'assets/party-and-monsters.png';
+  const elementNames = { slash: '斬', fire: '炎', ice: '氷', holy: '聖', lightning: '雷', none: '無' };
+  const escapeHtml = (text) => String(text).replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
+  const percent = (value, max) => `${Math.max(0, Math.min(100, (value / max) * 100))}%`;
 
-const TARGET = {
-  ENEMY_SINGLE: 'enemy_single',
-  ENEMY_ALL: 'enemy_all',
-  ALLY_SINGLE: 'ally_single',
-  ALLY_ALL: 'ally_all',
-  SELF: 'self'
-};
+  function progressFor(character) { return saveData.characters[character.id] || { level: 1, exp: 0 }; }
+  function isStageUnlocked(index) { return index === 0 || saveData.clearedStages.includes(DATA.stages[index - 1].id); }
 
-const STATUS = {
-  ATTACK_UP: 'attack_up',
-  DEF_DOWN: 'def_down',
-  STUN: 'stun',
-  REGEN: 'regen'
-};
-
-const SPRITE_ATLAS = 'assets/party-and-monsters.png';
-
-function createSkill({ id, name, targetType, cooldown = 0, desc, effects }) {
-  return { id, name, targetType, cooldown, desc, effects };
-}
-
-function createCharacter({ id, name, side, role, maxHp, atk, def, spd, sprite, icon, skills }) {
-  return {
-    id,
-    name,
-    side,
-    role,
-    maxHp,
-    hp: maxHp,
-    atk,
-    def,
-    spd,
-    sprite,
-    icon,
-    skills,
-    alive: true,
-    statuses: [],
-    cooldowns: Object.fromEntries(skills.map((skill) => [skill.id, 0]))
-  };
-}
-
-const skills = {
-  slash: createSkill({ id: 'slash', name: 'スラッシュ', targetType: TARGET.ENEMY_SINGLE, desc: '小ダメージ', effects: [{ type: 'damage', ratio: 0.9 }] }),
-  powerStrike: createSkill({ id: 'powerStrike', name: 'パワーストライク', targetType: TARGET.ENEMY_SINGLE, cooldown: 2, desc: '中ダメージ', effects: [{ type: 'damage', ratio: 1.5 }] }),
-  braveBurst: createSkill({ id: 'braveBurst', name: 'ブレイブバースト', targetType: TARGET.ENEMY_SINGLE, cooldown: 4, desc: '大ダメージ', effects: [{ type: 'damage', ratio: 2.3 }] }),
-
-  wandTap: createSkill({ id: 'wandTap', name: 'ワンドヒット', targetType: TARGET.ENEMY_SINGLE, desc: '小ダメージ+最低HP味方を小回復', effects: [{ type: 'damage', ratio: 0.8 }, { type: 'heal_lowest_ally', ratio: 0.22 }] }),
-  singleHeal: createSkill({ id: 'singleHeal', name: 'ヒール', targetType: TARGET.ALLY_SINGLE, cooldown: 2, desc: '味方単体回復', effects: [{ type: 'heal', ratio: 0.45 }] }),
-  allHeal: createSkill({ id: 'allHeal', name: 'グループヒール', targetType: TARGET.ALLY_ALL, cooldown: 5, desc: '味方全体回復', effects: [{ type: 'heal', ratio: 0.26 }] }),
-
-  arrowShot: createSkill({ id: 'arrowShot', name: 'アロウショット', targetType: TARGET.ENEMY_SINGLE, desc: '小ダメージ+自分に攻撃UP', effects: [{ type: 'damage', ratio: 0.8 }, { type: 'apply_status', status: STATUS.ATTACK_UP, turns: 2, potency: 0.2, target: 'self' }] }),
-  battleCry: createSkill({ id: 'battleCry', name: 'バトルクライ', targetType: TARGET.ALLY_SINGLE, cooldown: 3, desc: '味方単体に攻撃UP', effects: [{ type: 'apply_status', status: STATUS.ATTACK_UP, turns: 2, potency: 0.3 }] }),
-  rallySong: createSkill({ id: 'rallySong', name: 'ラリーソング', targetType: TARGET.ALLY_ALL, cooldown: 5, desc: '味方全体に攻撃UP', effects: [{ type: 'apply_status', status: STATUS.ATTACK_UP, turns: 2, potency: 0.2 }] }),
-
-  jabHex: createSkill({ id: 'jabHex', name: 'ヘックスジャブ', targetType: TARGET.ENEMY_SINGLE, desc: '小ダメージ+防御ダウン', effects: [{ type: 'damage', ratio: 0.75 }, { type: 'apply_status', status: STATUS.DEF_DOWN, turns: 2, potency: 0.2 }] }),
-  stunBomb: createSkill({ id: 'stunBomb', name: 'スタンボム', targetType: TARGET.ENEMY_SINGLE, cooldown: 3, desc: '敵単体を気絶', effects: [{ type: 'apply_status', status: STATUS.STUN, turns: 1 }] }),
-  breakStorm: createSkill({ id: 'breakStorm', name: 'ブレイクストーム', targetType: TARGET.ENEMY_ALL, cooldown: 5, desc: '敵全体に防御ダウン', effects: [{ type: 'apply_status', status: STATUS.DEF_DOWN, turns: 2, potency: 0.25 }] }),
-
-  slimeShot: createSkill({ id: 'slimeShot', name: 'ぷるショット', targetType: TARGET.ENEMY_SINGLE, desc: '小ダメージ', effects: [{ type: 'damage', ratio: 0.85 }] }),
-  slimeWrap: createSkill({ id: 'slimeWrap', name: 'ねばり付き', targetType: TARGET.ENEMY_SINGLE, cooldown: 3, desc: '小ダメージ+防御ダウン', effects: [{ type: 'damage', ratio: 0.8 }, { type: 'apply_status', status: STATUS.DEF_DOWN, turns: 2, potency: 0.2 }] }),
-  slimeRain: createSkill({ id: 'slimeRain', name: 'スライムレイン', targetType: TARGET.ENEMY_ALL, cooldown: 5, desc: '敵全体に小ダメージ', effects: [{ type: 'damage', ratio: 0.9 }] }),
-
-  claw: createSkill({ id: 'claw', name: 'ファイアクロー', targetType: TARGET.ENEMY_SINGLE, desc: '小ダメージ', effects: [{ type: 'damage', ratio: 0.95 }] }),
-  flameBreath: createSkill({ id: 'flameBreath', name: 'フレイムブレス', targetType: TARGET.ENEMY_SINGLE, cooldown: 2, desc: '中ダメージ', effects: [{ type: 'damage', ratio: 1.45 }] }),
-  inferno: createSkill({ id: 'inferno', name: 'インフェルノ', targetType: TARGET.ENEMY_ALL, cooldown: 5, desc: '敵全体に中ダメージ', effects: [{ type: 'damage', ratio: 1.15 }] }),
-
-  spiritTouch: createSkill({ id: 'spiritTouch', name: 'スピリットタッチ', targetType: TARGET.ENEMY_SINGLE, desc: '小ダメージ+最低HP味方に継続回復', effects: [{ type: 'damage', ratio: 0.65 }, { type: 'apply_status', status: STATUS.REGEN, turns: 2, potency: 0.08, target: 'lowest_ally' }] }),
-  soulMend: createSkill({ id: 'soulMend', name: 'ソウルメンド', targetType: TARGET.ALLY_SINGLE, cooldown: 3, desc: '味方単体回復', effects: [{ type: 'heal', ratio: 0.38 }] }),
-  phantomPrayer: createSkill({ id: 'phantomPrayer', name: 'ファントム祈祷', targetType: TARGET.ALLY_ALL, cooldown: 5, desc: '味方全体に継続回復', effects: [{ type: 'apply_status', status: STATUS.REGEN, turns: 3, potency: 0.07 }] }),
-
-  capHit: createSkill({ id: 'capHit', name: 'キャップアタック', targetType: TARGET.ENEMY_SINGLE, desc: '小ダメージ+防御ダウン', effects: [{ type: 'damage', ratio: 0.72 }, { type: 'apply_status', status: STATUS.DEF_DOWN, turns: 2, potency: 0.18 }] }),
-  sporeSleep: createSkill({ id: 'sporeSleep', name: 'しびれ胞子', targetType: TARGET.ENEMY_SINGLE, cooldown: 3, desc: '敵単体を気絶', effects: [{ type: 'apply_status', status: STATUS.STUN, turns: 1 }] }),
-  toxicField: createSkill({ id: 'toxicField', name: 'きのこフィールド', targetType: TARGET.ENEMY_ALL, cooldown: 5, desc: '敵全体に防御ダウン', effects: [{ type: 'apply_status', status: STATUS.DEF_DOWN, turns: 2, potency: 0.22 }] })
-};
-
-const state = {
-  allies: [],
-  enemies: [],
-  turnOrder: [],
-  turnIndex: 0,
-  round: 1,
-  currentActorId: null,
-  pendingSkill: null,
-  pendingTargetId: null,
-  phase: 'idle',
-  gameOver: false,
-  animations: {
-    actingId: null,
-    damageIds: [],
-    healIds: []
-  }
-};
-
-function setupBattle() {
-  state.allies = [
-    createCharacter({ id: 'ally-warrior', name: '剣士ライル', side: 'ally', role: '攻撃役', maxHp: 130, atk: 35, def: 14, spd: 18, sprite: { col: 0, row: 0 }, icon: '🗡️', skills: [skills.slash, skills.powerStrike, skills.braveBurst] }),
-    createCharacter({ id: 'ally-mage', name: '魔法使いミナ', side: 'ally', role: '回復役', maxHp: 110, atk: 24, def: 11, spd: 17, sprite: { col: 0, row: 1 }, icon: '🔮', skills: [skills.wandTap, skills.singleHeal, skills.allHeal] }),
-    createCharacter({ id: 'ally-ranger', name: 'レンジャーノア', side: 'ally', role: '支援役', maxHp: 115, atk: 26, def: 12, spd: 22, sprite: { col: 0, row: 2 }, icon: '🏹', skills: [skills.arrowShot, skills.battleCry, skills.rallySong] }),
-    createCharacter({ id: 'ally-priest', name: '神官セレス', side: 'ally', role: '妨害役', maxHp: 120, atk: 22, def: 13, spd: 16, sprite: { col: 0, row: 3 }, icon: '✨', skills: [skills.jabHex, skills.stunBomb, skills.breakStorm] })
-  ];
-
-  state.enemies = [
-    createCharacter({ id: 'enemy-slime', name: 'スライム', side: 'enemy', role: '攻撃役', maxHp: 125, atk: 28, def: 12, spd: 16, sprite: { col: 1, row: 0 }, icon: '💧', skills: [skills.slimeShot, skills.slimeWrap, skills.slimeRain] }),
-    createCharacter({ id: 'enemy-dragon', name: 'ドラゴン', side: 'enemy', role: '攻撃役', maxHp: 150, atk: 33, def: 15, spd: 14, sprite: { col: 1, row: 1 }, icon: '🐉', skills: [skills.claw, skills.flameBreath, skills.inferno] }),
-    createCharacter({ id: 'enemy-ghost', name: 'ゴースト', side: 'enemy', role: '回復役', maxHp: 105, atk: 20, def: 10, spd: 20, sprite: { col: 1, row: 2 }, icon: '👻', skills: [skills.spiritTouch, skills.soulMend, skills.phantomPrayer] }),
-    createCharacter({ id: 'enemy-mushroom', name: 'マッシュ', side: 'enemy', role: '妨害役', maxHp: 118, atk: 21, def: 12, spd: 15, sprite: { col: 1, row: 3 }, icon: '🍄', skills: [skills.capHit, skills.sporeSleep, skills.toxicField] })
-  ];
-
-  state.turnOrder = [];
-  state.turnIndex = 0;
-  state.round = 1;
-  state.currentActorId = null;
-  state.pendingSkill = null;
-  state.pendingTargetId = null;
-  state.phase = 'idle';
-  state.gameOver = false;
-  clearAnimations();
-  logEl.innerHTML = '';
-  appendLog('バトル開始！素早さ順に行動します。', 'system');
-  advanceToNextTurn();
-}
-
-function getAllUnits() {
-  return [...state.allies, ...state.enemies];
-}
-
-function getUnitById(id) {
-  return getAllUnits().find((u) => u.id === id);
-}
-
-function livingUnits(side) {
-  const pool = side === 'ally' ? state.allies : state.enemies;
-  return pool.filter((u) => u.alive);
-}
-
-function recalculateTurnOrder() {
-  state.turnOrder = getAllUnits()
-    .filter((u) => u.alive)
-    .sort((a, b) => b.spd - a.spd || Math.random() - 0.5)
-    .map((u) => u.id);
-}
-
-function getStatus(unit, type) {
-  return unit.statuses.find((s) => s.type === type);
-}
-
-function addOrRefreshStatus(target, statusData) {
-  const existing = getStatus(target, statusData.status);
-  if (existing) {
-    existing.turns = Math.max(existing.turns, statusData.turns);
-    existing.potency = Math.max(existing.potency || 0, statusData.potency || 0);
-  } else {
-    target.statuses.push({
-      type: statusData.status,
-      turns: statusData.turns,
-      potency: statusData.potency || 0
-    });
-  }
-}
-
-function decrementCooldowns(unit) {
-  unit.skills.forEach((skill) => {
-    if (unit.cooldowns[skill.id] > 0) unit.cooldowns[skill.id] -= 1;
-  });
-}
-
-function processTurnStart(unit) {
-  decrementCooldowns(unit);
-
-  const regen = getStatus(unit, STATUS.REGEN);
-  if (regen && unit.alive) {
-    const amount = Math.max(4, Math.floor(unit.maxHp * regen.potency));
-    const healed = healUnit(unit, amount);
-    if (healed > 0) appendLog(`${unit.name} は継続回復で ${healed} 回復。`, 'heal');
+  function render() {
+    if (screen === 'home') renderHome();
+    else if (screen === 'stages') renderStages();
+    else renderBattle();
   }
 
-  const stun = getStatus(unit, STATUS.STUN);
-  if (stun) {
-    appendLog(`${unit.name} は気絶して行動できない。`, 'system');
-    consumeStatuses(unit);
+  function renderHeader(title, kicker, backAction) {
+    return `<header class="screen-header">
+      ${backAction ? `<button class="icon-button" data-action="${backAction}" aria-label="戻る">‹</button>` : '<div class="brand-mark">B</div>'}
+      <div class="header-copy"><span>${escapeHtml(kicker)}</span><h1>${escapeHtml(title)}</h1></div>
+      <div class="gold-pill"><span>Ｇ</span>${saveData.gold}</div>
+    </header>`;
+  }
+
+  function renderHome() {
+    const cleared = saveData.clearedStages.length;
+    app.innerHTML = `<main class="screen home-screen">
+      ${renderHeader('BRAVE COMMAND', 'MOBILE TACTICAL RPG')}
+      <section class="hero-panel">
+        <div class="hero-sun"></div><div class="hero-hills"></div>
+        <div class="hero-copy"><p>CHAPTER 1</p><h2>草原戦線</h2><span>小さな部隊の、大きな反撃。</span></div>
+        <div class="hero-party" aria-hidden="true"><span>⚔️</span><span>🧙</span><span>🛡️</span><span>🏰</span></div>
+      </section>
+      <section class="home-card progress-card">
+        <div><span class="eyebrow">MISSION PROGRESS</span><h3>進行度 ${cleared} / ${DATA.stages.length}</h3></div>
+        <div class="chapter-progress"><i style="width:${cleared / DATA.stages.length * 100}%"></i></div>
+        <p>${cleared === DATA.stages.length ? '全ステージ制覇！ 何度でも再挑戦できます。' : '次の戦場へ進み、草原の平和を取り戻そう。'}</p>
+      </section>
+      <button class="primary-cta" data-action="stages"><span>出撃する</span><small>ステージを選択</small><b>›</b></button>
+      <section class="party-preview">
+        <div class="section-title"><div><span class="eyebrow">YOUR SQUAD</span><h3>第七遊撃隊</h3></div><span>4 / 4</span></div>
+        <div class="party-grid">${DATA.characters.map((character) => {
+          const progress = progressFor(character); const stats = levelStats(character, progress.level);
+          return `<article class="member-card"><div class="portrait ${character.id}">${character.icon}</div><div><b>${character.name}</b><small>Lv.${progress.level} · ${character.role}</small><div class="mini-hp"><i style="width:100%"></i></div><span>HP ${stats.maxHp}</span></div></article>`;
+        }).join('')}</div>
+      </section>
+      <footer class="home-footer"><button data-action="reset-save">データを初期化</button><span>端末内に自動保存</span></footer>
+    </main>`;
+  }
+
+  function renderStages() {
+    app.innerHTML = `<main class="screen stage-screen">
+      ${renderHeader('ステージ選択', 'CHAPTER 1 · 草原戦線', 'home')}
+      <section class="stage-intro"><div><span class="eyebrow">AREA MAP</span><h2>進路を選択</h2></div><p>各ステージは3 Wave。<br>勝利して次の戦場を解放しよう。</p></section>
+      <div class="stage-list">${DATA.stages.map((stage, index) => {
+        const unlocked = isStageUnlocked(index); const cleared = saveData.clearedStages.includes(stage.id);
+        const enemies = [...new Set(stage.waves.flat())].map((id) => DATA.enemies[id].icon).join('');
+        return `<button class="stage-card ${unlocked ? '' : 'locked'} ${cleared ? 'cleared' : ''}" data-stage="${stage.id}" ${unlocked ? '' : 'disabled'}>
+          <div class="stage-number"><span>${stage.number}</span>${cleared ? '<b>✓</b>' : unlocked ? '<b>!</b>' : '<b>🔒</b>'}</div>
+          <div class="stage-info"><span>${cleared ? 'CLEARED' : unlocked ? 'NEW MISSION' : 'LOCKED'}</span><h3>${stage.name}</h3><p>${stage.subtitle}</p><div class="stage-meta"><em>WAVE 3</em><em>EXP ${stage.rewards.exp}</em><em>${stage.rewards.gold} G</em></div></div>
+          <div class="enemy-icons">${enemies}</div>
+        </button>`;
+      }).join('')}</div>
+      <div class="inventory-strip"><b>所持品</b>${Object.values(DATA.items).map((item) => `<span>${item.icon} ${item.name} ×${saveData.items[item.id] || 0}</span>`).join('')}</div>
+    </main>`;
+  }
+
+  function unitCard(unit) {
+    const isCurrent = unit.uid === battle.state.currentActorId;
+    const selected = unit.uid === battle.state.selectedTargetId;
+    const selectable = battle.validTarget(unit.uid);
+    const animation = battle.state.animation || {};
+    const classes = [unit.side === 'ally' ? 'ally-unit' : 'enemy-unit', isCurrent ? 'active' : '', selected ? 'selected' : '', selectable ? 'selectable' : '', unit.hp <= 0 ? 'dead' : '', animation.actorUid === unit.uid ? 'acting' : '', (animation.damaged || []).includes(unit.uid) ? 'damaged' : '', (animation.healed || []).includes(unit.uid) ? 'healed' : ''].filter(Boolean).join(' ');
+    const statuses = Object.keys(unit.statuses).map((key) => `<span title="${key}">${STATUS_LABELS[key] || key}</span>`).join('');
+    const popups = battle.state.popups.filter((popup) => popup.uid === unit.uid).map((popup) => `<i class="float-number ${popup.type}">${popup.type === 'weak' ? '<small>弱点！</small>' : ''}${popup.text}</i>`).join('');
+    const weakness = unit.side === 'enemy' ? `<div class="weakness">弱点 ${(unit.weaknesses || []).map((key) => `<b>${elementNames[key]}</b>`).join(' ') || 'なし'}</div>` : '';
+    const prediction = unit.side === 'enemy' && unit.id === 'dragon' && unit.hp > 0 ? `<div class="prediction">次：${DATA.skills[unit.nextAction]?.name || '攻撃'}</div>` : '';
+    return `<button class="unit-card ${classes}" data-target="${unit.uid}" ${selectable ? '' : 'disabled'}>
+      ${popups}<div class="unit-portrait">${unit.icon}<span>Lv.${unit.level || 1}</span></div>
+      <div class="unit-body"><div class="unit-name"><b>${unit.name}</b>${isCurrent ? '<em>行動中</em>' : ''}</div>
+        <div class="bar-row"><span>HP</span><div class="meter hp"><i style="width:${percent(unit.hp, unit.maxHp)}"></i></div><small>${unit.hp}/${unit.maxHp}</small></div>
+        ${unit.side === 'ally' ? `<div class="bar-row"><span>MP</span><div class="meter mp"><i style="width:${percent(unit.mp, unit.maxMp)}"></i></div><small>${unit.mp}/${unit.maxMp}</small></div>` : ''}
+        <div class="status-row">${statuses || '<span class="quiet">正常</span>'}</div>${weakness}${prediction}
+      </div>
+    </button>`;
+  }
+
+  function commandPanel() {
+    const state = battle.state;
+    const actor = battle.currentActor();
+    if (state.result) return '';
+    if (!actor || actor.side !== 'ally' || !['COMMAND_SELECT', 'SKILL_SELECT', 'ITEM_SELECT', 'TARGET_SELECT'].includes(state.phase)) {
+      return `<div class="waiting-panel"><span class="spinner"></span><b>${state.phase === 'WAVE_CLEAR' ? '次のWaveへ…' : '敵の行動を待っています'}</b></div>`;
+    }
+    let body = '';
+    if (state.phase === 'COMMAND_SELECT') {
+      body = `<div class="command-grid">
+        <button data-command="attack"><span>⚔</span><b>攻撃</b><small>ATTACK</small></button>
+        <button data-command="skill"><span>✦</span><b>スキル</b><small>SKILL</small></button>
+        <button data-command="defend"><span>⬟</span><b>防御</b><small>GUARD</small></button>
+        <button data-command="item"><span>◆</span><b>道具</b><small>ITEM</small></button>
+      </div>`;
+    } else if (state.phase === 'SKILL_SELECT') {
+      body = `<div class="list-command">${actor.skills.map((id) => {
+        const skill = DATA.skills[id]; const disabled = actor.mp < skill.mpCost || (skill.once && actor.usedOnce.includes(id));
+        return `<button data-skill="${id}" ${disabled ? 'disabled' : ''}><span class="skill-icon">${skill.type === 'heal' ? '✚' : skill.type === 'status' ? '⬆' : '✦'}</span><div><b>${skill.name}</b><small>${skill.description}</small></div><em>MP ${skill.mpCost}</em></button>`;
+      }).join('')}</div>`;
+    } else if (state.phase === 'ITEM_SELECT') {
+      body = `<div class="list-command item-list">${Object.values(DATA.items).map((item) => `<button data-item="${item.id}" ${(saveData.items[item.id] || 0) <= 0 ? 'disabled' : ''}><span class="skill-icon">${item.icon}</span><div><b>${item.name}</b><small>${item.description}</small></div><em>×${saveData.items[item.id] || 0}</em></button>`).join('')}</div>`;
+    } else {
+      const action = state.selectedAction.kind === 'skill' ? DATA.skills[state.selectedAction.id] : DATA.items[state.selectedAction.id];
+      body = `<div class="target-message"><span>◎</span><div><b>対象を選んでください</b><small>${action.name} · 光っている対象をタップ</small></div></div>`;
+    }
+    return `<section class="command-panel"><div class="command-head"><div><span>NOW ACTING</span><b>${actor.icon} ${actor.name}</b></div><p>${state.phase === 'COMMAND_SELECT' ? 'コマンドを選択' : state.phase === 'SKILL_SELECT' ? 'スキルを選択' : state.phase === 'ITEM_SELECT' ? '道具を選択' : '対象選択中'}</p>${state.phase !== 'COMMAND_SELECT' ? '<button data-action="cancel">× 戻る</button>' : ''}</div>${body}</section>`;
+  }
+
+  function resultModal() {
+    const state = battle.state;
+    if (!state.result) return '';
+    if (state.result === 'victory') {
+      return `<div class="modal-backdrop"><section class="result-modal victory-modal"><div class="result-emblem">★</div><span>STAGE CLEAR</span><h2>作戦成功！</h2><p>${battle.stage.name}を突破しました</p>
+        <div class="reward-box"><div><small>獲得EXP</small><b>+${state.reward.exp}</b></div><div><small>獲得ゴールド</small><b>+${state.reward.gold} G</b></div></div>
+        ${state.reward.levelUps.length ? `<div class="level-up"><b>LEVEL UP!</b>${state.reward.levelUps.join(' / ')}</div>` : ''}
+        <button class="result-primary" data-action="stages">ステージ選択へ</button><button class="result-secondary" data-action="retry">もう一度挑戦</button>
+      </section></div>`;
+    }
+    return `<div class="modal-backdrop"><section class="result-modal defeat-modal"><div class="result-emblem">×</div><span>MISSION FAILED</span><h2>部隊壊滅</h2><p>編成とコマンドを見直して再挑戦しよう</p><button class="result-primary" data-action="retry">再挑戦</button><button class="result-secondary" data-action="stages">ステージ選択へ</button></section></div>`;
+  }
+
+  function renderBattle() {
+    const state = battle.state;
+    const current = battle.currentActor();
+    app.innerHTML = `<main class="battle-screen">
+      <header class="battle-header"><div><span>${battle.stage.number}</span><h1>${battle.stage.name}</h1></div><div class="wave-label"><small>WAVE</small><b>${state.wave}<i>/</i>${battle.stage.waves.length}</b></div><button data-action="quit" aria-label="撤退">☰</button></header>
+      <section class="battle-arena">
+        <div class="sky"><i></i><i></i></div><div class="ground-lines"></div>
+        <div class="turn-banner">${current ? `<span>${current.icon}</span><b>${current.name}</b><small>${current.side === 'ally' ? 'のターン' : 'が行動中'}</small>` : '戦闘開始'}</div>
+        <div class="formation ally-formation"><h2><span>ALLY</span>味方部隊</h2>${state.allies.map(unitCard).join('')}</div>
+        <div class="versus-mark">TURN <b>${state.turnCount}</b></div>
+        <div class="formation enemy-formation"><h2><span>ENEMY</span>敵部隊</h2>${state.enemies.map(unitCard).join('')}</div>
+      </section>
+      <section class="battle-bottom">
+        <div class="battle-log"><div class="log-title"><span>戦況ログ</span><i></i></div><div class="log-lines">${state.logs.slice(-4).reverse().map((entry, index) => `<p class="${entry.type} ${index === 0 ? 'latest' : ''}">${escapeHtml(entry.text)}</p>`).join('')}</div></div>
+        ${commandPanel()}
+      </section>${resultModal()}
+    </main>`;
+  }
+
+  function startBattle(stageId) {
+    screen = 'battle';
+    battle = new BattleEngine(stageId, saveData, () => {});
+    battle.onChange = render;
     render();
-    setTimeout(() => advanceToNextTurn(), 550);
-    return false;
   }
 
-  return true;
-}
-
-function consumeStatuses(unit) {
-  unit.statuses = unit.statuses.map((s) => ({ ...s, turns: s.turns - 1 })).filter((s) => s.turns > 0);
-}
-
-function healUnit(target, amount) {
-  const before = target.hp;
-  target.hp = Math.min(target.maxHp, target.hp + amount);
-  return target.hp - before;
-}
-
-function calculateDamage(attacker, target, ratio) {
-  const atkUp = getStatus(attacker, STATUS.ATTACK_UP);
-  const defDown = getStatus(target, STATUS.DEF_DOWN);
-  const atkBuff = 1 + ((atkUp && atkUp.potency) || 0);
-  const defDebuff = 1 + ((defDown && defDown.potency) || 0);
-  const atkVal = attacker.atk * atkBuff;
-  const defVal = Math.max(1, target.def / defDebuff);
-  const base = Math.max(1, Math.floor(atkVal * ratio - defVal * 0.5));
-  const variance = Math.floor(Math.random() * 5) - 2;
-  return Math.max(1, base + variance);
-}
-
-function damageUnit(attacker, target, ratio, skillName) {
-  const amount = calculateDamage(attacker, target, ratio);
-  target.hp -= amount;
-  if (target.hp <= 0) {
-    target.hp = 0;
-    target.alive = false;
-    appendLog(`${skillName}: ${target.name} に ${amount} ダメージ！`, 'damage');
-    appendLog(`${target.name} は倒れた。`, 'system');
-  } else {
-    appendLog(`${skillName}: ${target.name} に ${amount} ダメージ！`, 'damage');
-  }
-  return amount;
-}
-
-function pickTargets(actor, skill, preferredTargetId = null) {
-  const allies = livingUnits(actor.side);
-  const enemies = livingUnits(actor.side === 'ally' ? 'enemy' : 'ally');
-
-  switch (skill.targetType) {
-    case TARGET.ENEMY_SINGLE: {
-      if (preferredTargetId) {
-        const preferred = getUnitById(preferredTargetId);
-        if (preferred && preferred.alive && preferred.side !== actor.side) return [preferred];
-      }
-      return [enemies[Math.floor(Math.random() * enemies.length)]];
-    }
-    case TARGET.ENEMY_ALL:
-      return enemies;
-    case TARGET.ALLY_SINGLE: {
-      if (preferredTargetId) {
-        const preferred = getUnitById(preferredTargetId);
-        if (preferred && preferred.alive && preferred.side === actor.side) return [preferred];
-      }
-      return [allies[Math.floor(Math.random() * allies.length)]];
-    }
-    case TARGET.ALLY_ALL:
-      return allies;
-    case TARGET.SELF:
-      return [actor];
-    default:
-      return [];
-  }
-}
-
-function lowestHpRateUnit(units) {
-  return units.reduce((lowest, unit) => ((unit.hp / unit.maxHp) < (lowest.hp / lowest.maxHp) ? unit : lowest), units[0]);
-}
-
-function playActionAnimation(actorId, damageIds, healIds) {
-  state.animations.actingId = actorId;
-  state.animations.damageIds = [...new Set(damageIds)];
-  state.animations.healIds = [...new Set(healIds)];
-  render();
-  setTimeout(() => {
-    clearAnimations();
-    render();
-  }, 320);
-}
-
-function clearAnimations() {
-  state.animations.actingId = null;
-  state.animations.damageIds = [];
-  state.animations.healIds = [];
-}
-
-function executeSkill(actor, skill, targetId = null) {
-  if (!actor.alive) return;
-
-  const targets = pickTargets(actor, skill, targetId);
-  if (!targets.length) return;
-
-  appendLog(`${actor.name} の ${skill.name}！`, 'system');
-
-  const damageIds = [];
-  const healIds = [];
-
-  skill.effects.forEach((effect) => {
-    if (effect.type === 'damage') {
-      targets.forEach((target) => {
-        if (!target.alive) return;
-        damageUnit(actor, target, effect.ratio, skill.name);
-        damageIds.push(target.id);
-      });
-    }
-
-    if (effect.type === 'heal') {
-      targets.forEach((target) => {
-        const amount = Math.max(6, Math.floor(target.maxHp * effect.ratio));
-        const healed = healUnit(target, amount);
-        appendLog(`${skill.name}: ${target.name} が ${healed} 回復。`, 'heal');
-        if (healed > 0) healIds.push(target.id);
-      });
-    }
-
-    if (effect.type === 'heal_lowest_ally') {
-      const allies = livingUnits(actor.side);
-      if (allies.length) {
-        const target = lowestHpRateUnit(allies);
-        const amount = Math.max(5, Math.floor(target.maxHp * effect.ratio));
-        const healed = healUnit(target, amount);
-        appendLog(`${skill.name}: ${target.name} が ${healed} 回復。`, 'heal');
-        if (healed > 0) healIds.push(target.id);
-      }
-    }
-
-    if (effect.type === 'apply_status') {
-      let statusTargets = targets;
-      if (effect.target === 'self') statusTargets = [actor];
-      if (effect.target === 'lowest_ally') {
-        const allies = livingUnits(actor.side);
-        statusTargets = allies.length ? [lowestHpRateUnit(allies)] : [];
-      }
-      statusTargets.forEach((target) => {
-        addOrRefreshStatus(target, effect);
-        appendLog(`${skill.name}: ${target.name} に ${statusLabel(effect.status)} (${effect.turns}T)。`, 'system');
-      });
-    }
-  });
-
-  if (skill.cooldown > 0) actor.cooldowns[skill.id] = skill.cooldown;
-  consumeStatuses(actor);
-  playActionAnimation(actor.id, damageIds, healIds);
-}
-
-function statusLabel(type) {
-  if (type === STATUS.ATTACK_UP) return '攻撃UP';
-  if (type === STATUS.DEF_DOWN) return '防御DOWN';
-  if (type === STATUS.STUN) return '気絶';
-  if (type === STATUS.REGEN) return '継続回復';
-  return type;
-}
-
-function chooseEnemyAction(enemy) {
-  const available = enemy.skills.filter((skill) => enemy.cooldowns[skill.id] === 0);
-  const enemyTeam = livingUnits('enemy');
-  const opponents = livingUnits('ally');
-
-  const bigSkill = available.find((skill) => skill.cooldown >= 5);
-  if (bigSkill && Math.random() < 0.65) return { skill: bigSkill, targetId: null };
-
-  const healSkill = available.find((skill) => skill.effects.some((e) => e.type === 'heal' || e.type === 'heal_lowest_ally'));
-  const hurtAlly = enemyTeam.find((u) => u.hp / u.maxHp < 0.55);
-  if (healSkill && hurtAlly) return { skill: healSkill, targetId: hurtAlly.id };
-
-  const weightedTargets = [];
-  opponents.forEach((unit) => {
-    const rate = unit.hp / unit.maxHp;
-    const weight = rate < 0.4 ? 3 : rate < 0.7 ? 2 : 1;
-    for (let i = 0; i < weight; i += 1) weightedTargets.push(unit);
-  });
-  const chosenTarget = weightedTargets[Math.floor(Math.random() * weightedTargets.length)] || opponents[0];
-
-  const pickedSkill = [...available].sort((a, b) => b.cooldown - a.cooldown)[0] || enemy.skills[0];
-  return { skill: pickedSkill, targetId: (chosenTarget && chosenTarget.id) || null };
-}
-
-function checkGameOver() {
-  const allyAlive = livingUnits('ally').length > 0;
-  const enemyAlive = livingUnits('enemy').length > 0;
-  if (!allyAlive || !enemyAlive) {
-    state.gameOver = true;
-    state.phase = 'ended';
-    state.pendingSkill = null;
-    state.pendingTargetId = null;
-    statusEl.textContent = allyAlive ? '勝利！敵を全滅させた。' : '敗北…味方が全滅した。';
-    turnInfoEl.textContent = 'バトル終了';
-    targetHintEl.textContent = 'リスタートで再戦できます。';
-    return true;
-  }
-  return false;
-}
-
-function advanceToNextTurn() {
-  if (state.gameOver) return;
-
-  if (!state.turnOrder.length || state.turnIndex >= state.turnOrder.length) {
-    recalculateTurnOrder();
-    state.turnIndex = 0;
-    state.round += 1;
-  }
-
-  const actorId = state.turnOrder[state.turnIndex];
-  state.turnIndex += 1;
-  const actor = getUnitById(actorId);
-
-  if (!actor || !actor.alive) {
-    advanceToNextTurn();
-    return;
-  }
-
-  state.currentActorId = actor.id;
-  state.pendingSkill = null;
-  state.pendingTargetId = null;
-  turnInfoEl.textContent = `Round ${state.round} / 行動: ${actor.name}`;
-
-  const canAct = processTurnStart(actor);
-  if (!canAct) return;
-
-  if (actor.side === 'ally') {
-    state.phase = 'await_player_skill';
-    statusEl.textContent = `${actor.name} の行動。スキルを選択してください。`;
-    targetHintEl.textContent = 'スキル選択後、対象指定または発動確認を行います。';
-    render();
-    return;
-  }
-
-  state.phase = 'enemy_acting';
-  statusEl.textContent = `${actor.name} が行動中...`;
-  render();
-
-  setTimeout(() => {
-    const action = chooseEnemyAction(actor);
-    executeSkill(actor, action.skill, action.targetId);
-    if (!checkGameOver()) {
-      render();
-      setTimeout(() => advanceToNextTurn(), 560);
-    }
-    render();
-  }, 550);
-}
-
-function isSingleTarget(skill) {
-  return skill.targetType === TARGET.ENEMY_SINGLE || skill.targetType === TARGET.ALLY_SINGLE;
-}
-
-function targetLabelForSkill(skill) {
-  if (skill.targetType === TARGET.ENEMY_ALL) return '敵全体';
-  if (skill.targetType === TARGET.ALLY_ALL) return '味方全体';
-  if (skill.targetType === TARGET.SELF) return '自分';
-  if (skill.targetType === TARGET.ENEMY_SINGLE) return '敵単体';
-  if (skill.targetType === TARGET.ALLY_SINGLE) return '味方単体';
-  return '対象なし';
-}
-
-function onSkillClick(skill) {
-  const actor = getUnitById(state.currentActorId);
-  if (!actor || !state.phase.startsWith('await_player')) return;
-  if (actor.cooldowns[skill.id] > 0) return;
-
-  state.pendingSkill = skill;
-  state.pendingTargetId = null;
-
-  if (isSingleTarget(skill)) {
-    state.phase = 'await_player_target';
-    statusEl.textContent = `${skill.name} の対象を選択。別スキルへ変更も可能です。`;
-    targetHintEl.textContent = skill.targetType === TARGET.ENEMY_SINGLE ? '右側の敵をタップ（戻る可）' : '左側の味方をタップ（戻る可）';
-    render();
-    return;
-  }
-
-  state.phase = 'await_player_confirm';
-  statusEl.textContent = `${skill.name} を発動しますか？`;
-  targetHintEl.textContent = `${targetLabelForSkill(skill)}に効果。発動前に戻って変更できます。`;
-  render();
-}
-
-function onUnitClick(unitId) {
-  if (state.phase !== 'await_player_target') return;
-
-  const actor = getUnitById(state.currentActorId);
-  const skill = state.pendingSkill;
-  const target = getUnitById(unitId);
-  if (!actor || !skill || !target || !target.alive) return;
-
-  const enemySingle = skill.targetType === TARGET.ENEMY_SINGLE && target.side !== actor.side;
-  const allySingle = skill.targetType === TARGET.ALLY_SINGLE && target.side === actor.side;
-  if (!enemySingle && !allySingle) return;
-
-  state.pendingTargetId = target.id;
-  state.phase = 'await_player_confirm';
-  statusEl.textContent = `${target.name} に ${skill.name} を使用します。`;
-  targetHintEl.textContent = '発動するか、戻って選び直してください。';
-  render();
-}
-
-function onBackClick() {
-  if (!state.phase.startsWith('await_player')) return;
-  state.pendingSkill = null;
-  state.pendingTargetId = null;
-  state.phase = 'await_player_skill';
-
-  const actor = getUnitById(state.currentActorId);
-  statusEl.textContent = `${(actor && actor.name) || ''} の行動。スキルを選択してください。`;
-  targetHintEl.textContent = 'スキルを選ぶと対象を選択・確認できます。';
-  render();
-}
-
-function onConfirmClick() {
-  if (state.phase !== 'await_player_confirm') return;
-
-  const actor = getUnitById(state.currentActorId);
-  const skill = state.pendingSkill;
-  if (!actor || !skill) return;
-
-  if (isSingleTarget(skill)) {
-    const target = getUnitById(state.pendingTargetId);
-    if (!target || !target.alive) {
-      statusEl.textContent = '対象が無効です。選び直してください。';
-      state.phase = 'await_player_target';
-      render();
+  app.addEventListener('click', (event) => {
+    const actionButton = event.target.closest('[data-action]');
+    if (actionButton) {
+      const action = actionButton.dataset.action;
+      if (action === 'home') { screen = 'home'; battle = null; render(); }
+      if (action === 'stages') { screen = 'stages'; battle = null; render(); }
+      if (action === 'cancel') battle.cancelSelection();
+      if (action === 'retry') startBattle(battle.stage.id);
+      if (action === 'quit' && window.confirm('戦闘を中断してステージ選択へ戻りますか？')) { screen = 'stages'; battle = null; render(); }
+      if (action === 'reset-save' && window.confirm('セーブデータを初期化しますか？')) { saveData = SaveStore.reset(); render(); }
       return;
     }
-  }
+    const stageButton = event.target.closest('[data-stage]');
+    if (stageButton && !stageButton.disabled) return startBattle(stageButton.dataset.stage);
+    const command = event.target.closest('[data-command]');
+    if (command) return battle.selectCommand(command.dataset.command);
+    const skill = event.target.closest('[data-skill]');
+    if (skill && !skill.disabled) return battle.selectAction({ kind: 'skill', id: skill.dataset.skill });
+    const item = event.target.closest('[data-item]');
+    if (item && !item.disabled) return battle.selectAction({ kind: 'item', id: item.dataset.item });
+    const target = event.target.closest('[data-target]');
+    if (target && !target.disabled) battle.chooseTarget(target.dataset.target);
+  });
 
-  executeSkill(actor, skill, state.pendingTargetId);
-  state.pendingSkill = null;
-  state.pendingTargetId = null;
-
-  if (!checkGameOver()) advanceToNextTurn();
   render();
-}
-
-function spriteStyle(unit) {
-  const colPercent = unit.sprite.col * 100;
-  const rowPercent = unit.sprite.row * 33.333;
-  return `background-image:url('${SPRITE_ATLAS}');background-position:${colPercent}% ${rowPercent}%;`;
-}
-
-function renderUnitList(container, units) {
-  container.innerHTML = '';
-  const actorId = state.currentActorId;
-
-  units.forEach((unit) => {
-    const hpRate = Math.max(0, (unit.hp / unit.maxHp) * 100);
-    const isActive = actorId === unit.id;
-
-    const isChoosingEnemy = state.phase === 'await_player_target' && state.pendingSkill && state.pendingSkill.targetType === TARGET.ENEMY_SINGLE;
-    const isChoosingAlly = state.phase === 'await_player_target' && state.pendingSkill && state.pendingSkill.targetType === TARGET.ALLY_SINGLE;
-    const canTargetEnemy = isChoosingEnemy && unit.side === 'enemy' && unit.alive;
-    const canTargetAlly = isChoosingAlly && unit.side === 'ally' && unit.alive;
-    const selectedTarget = state.pendingTargetId === unit.id && state.phase === 'await_player_confirm';
-
-    const card = document.createElement('div');
-    card.className = [
-      'unit',
-      unit.alive ? '' : 'dead',
-      isActive ? 'active' : '',
-      (canTargetEnemy || canTargetAlly) ? 'selectable' : '',
-      selectedTarget ? 'target-selected' : '',
-      state.animations.actingId === unit.id ? 'anim-attacking' : '',
-      state.animations.damageIds.includes(unit.id) ? 'anim-damaged' : '',
-      state.animations.healIds.includes(unit.id) ? 'anim-healed' : ''
-    ].filter(Boolean).join(' ');
-
-    const badges = unit.statuses.map((s) => `<span class="badge">${statusLabel(s.type)}:${s.turns}</span>`).join('');
-
-    card.innerHTML = `
-      <div class="unit-main">
-        <div class="sprite" style="${spriteStyle(unit)}"><span class="sprite-fallback">${unit.icon}</span></div>
-        <div class="unit-info">
-          <div class="unit-header">
-            <strong>${unit.name}</strong>
-            <small>${unit.role}</small>
-          </div>
-          <div>HP ${unit.hp}/${unit.maxHp}</div>
-          <div class="hp-bar"><span class="hp-fill" style="width:${hpRate}%"></span></div>
-          <div class="badges">${badges || '<span class="badge">-</span>'}</div>
-        </div>
-      </div>
-    `;
-
-    if (canTargetEnemy || canTargetAlly) card.addEventListener('click', () => onUnitClick(unit.id));
-    container.appendChild(card);
-  });
-}
-
-function renderSkillButtons() {
-  skillButtonsEl.innerHTML = '';
-  const actor = getUnitById(state.currentActorId);
-
-  if (!actor || actor.side !== 'ally' || state.gameOver) {
-    commandTitleEl.textContent = 'コマンド';
-    return;
-  }
-
-  commandTitleEl.textContent = `${actor.name} のスキル`;
-  const selectablePhase = state.phase.startsWith('await_player');
-
-  actor.skills.forEach((skill, index) => {
-    const cd = actor.cooldowns[skill.id];
-    const btn = document.createElement('button');
-    btn.className = `skill ${state.pendingSkill && state.pendingSkill.id === skill.id ? 'selected' : ''}`.trim();
-    btn.disabled = !selectablePhase || cd > 0;
-    const cdText = cd > 0 ? `CT: ${cd}` : '使用可能';
-    btn.innerHTML = `S${index + 1} ${skill.name}<small>${skill.desc} / ${cdText}</small>`;
-    btn.addEventListener('click', () => onSkillClick(skill));
-    skillButtonsEl.appendChild(btn);
-  });
-}
-
-function renderConfirmRow() {
-  const actor = getUnitById(state.currentActorId);
-  const skill = state.pendingSkill;
-  const target = state.pendingTargetId ? getUnitById(state.pendingTargetId) : null;
-
-  if (!actor || actor.side !== 'ally' || state.gameOver) {
-    selectionSummaryEl.textContent = '';
-    backBtn.style.display = 'none';
-    confirmBtn.style.display = 'none';
-    return;
-  }
-
-  const inPlayerFlow = state.phase.startsWith('await_player');
-  backBtn.style.display = inPlayerFlow ? 'inline-block' : 'none';
-
-  if (!skill) {
-    selectionSummaryEl.textContent = 'スキルを選択してください。';
-    confirmBtn.style.display = 'none';
-    backBtn.disabled = true;
-    return;
-  }
-
-  backBtn.disabled = false;
-  if (state.phase === 'await_player_target') {
-    selectionSummaryEl.textContent = `選択中: ${skill.name}（${targetLabelForSkill(skill)}）`;
-    confirmBtn.style.display = 'none';
-    return;
-  }
-
-  if (state.phase === 'await_player_confirm') {
-    const targetText = target ? ` → ${target.name}` : ` → ${targetLabelForSkill(skill)}`;
-    selectionSummaryEl.textContent = `確認: ${skill.name}${targetText}`;
-    confirmBtn.style.display = 'inline-block';
-    confirmBtn.disabled = isSingleTarget(skill) && !target;
-    return;
-  }
-
-  selectionSummaryEl.textContent = 'スキルを選択してください。';
-  confirmBtn.style.display = 'none';
-}
-
-function render() {
-  renderUnitList(allyAreaEl, state.allies);
-  renderUnitList(enemyAreaEl, state.enemies);
-  renderSkillButtons();
-  renderConfirmRow();
-}
-
-function appendLog(message, cls = '') {
-  const line = document.createElement('div');
-  line.className = `log-line ${cls}`.trim();
-  line.textContent = message;
-  logEl.prepend(line);
-
-  while (logEl.children.length > MAX_LOG_LINES) {
-    if (logEl.lastElementChild) logEl.lastElementChild.remove();
-  }
-}
-
-restartBtn.addEventListener('click', setupBattle);
-backBtn.addEventListener('click', onBackClick);
-confirmBtn.addEventListener('click', onConfirmClick);
-setupBattle();
+}());
